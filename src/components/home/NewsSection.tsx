@@ -2,15 +2,25 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useAppSelector } from '@/redux/hooks';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
+import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
+import { fetchNewsData } from '@/redux/slices/newsSlice';
 
 const NewsSection: React.FC = () => {
   const { news, loading, error } = useAppSelector(state => state.news);
+  const dispatch = useAppDispatch();
   
   // Take only the top 3 news items for the home page section
   const topNews = Array.isArray(news) ? news.slice(0, 3) : [];
+  
+  // Check if error is related to API key
+  const isApiKeyError = error && error.toLowerCase().includes('api key');
+  
+  const handleRetry = () => {
+    dispatch(fetchNewsData('crypto'));
+  };
   
   const formatPublishedDate = (dateString: string) => {
     if (!dateString) return '';
@@ -42,13 +52,19 @@ const NewsSection: React.FC = () => {
         <div className="flex justify-center py-12">
           <LoadingSpinner size="md" />
         </div>
+      ) : isApiKeyError ? (
+        <ApiErrorDisplay 
+          message={error} 
+          apiName="NewsData" 
+          retry={handleRetry}
+        />
       ) : error ? (
-        <ErrorDisplay message={error} compact={true} />
+        <ErrorDisplay message={error} retry={handleRetry} compact={true} />
       ) : (
         <div className="space-y-4">
           {topNews.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
-              <p className="text-gray-500 dark:text-gray-400">No news articles available.</p>
+              <p className="text-gray-500 dark:text-gray-400">No news articles available. Please check your API key.</p>
             </div>
           ) : (
             topNews.map(article => (

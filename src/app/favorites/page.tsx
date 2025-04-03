@@ -8,8 +8,8 @@ import CryptoCard from '@/components/crypto/CryptoCard';
 import { CryptoData } from '@/types';
 
 export default function FavoritesPage() {
-  const { cities, loading: citiesLoading } = useAppSelector(state => state.weather);
-  const { cryptos, loading: cryptosLoading } = useAppSelector(state => state.crypto);
+  const { cities } = useAppSelector(state => state.weather);
+  const { cryptos } = useAppSelector(state => state.crypto);
   const { favoriteCities, favoriteCryptos } = useAppSelector(state => state.preferences);
   
   const favoriteCitiesData = cities.filter(city => favoriteCities.includes(city.cityId));

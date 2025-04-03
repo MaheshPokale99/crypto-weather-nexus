@@ -2,16 +2,26 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useAppSelector } from '@/redux/hooks';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import WeatherCard from '@/components/weather/WeatherCard';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
+import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
+import { fetchWeatherData } from '@/redux/slices/weatherSlice';
 
 const WeatherSection: React.FC = () => {
   const { cities, loading, error } = useAppSelector(state => state.weather);
+  const dispatch = useAppDispatch();
   
   // Take only the top 3 cities for the home page section
   const topCities = Array.isArray(cities) ? cities.slice(0, 3) : [];
+  
+  // Check if error is related to API key
+  const isApiKeyError = error && error.toLowerCase().includes('api key');
+  
+  const handleRetry = () => {
+    dispatch(fetchWeatherData());
+  };
   
   return (
     <section className="mb-10">
@@ -29,8 +39,14 @@ const WeatherSection: React.FC = () => {
         <div className="flex justify-center py-12">
           <LoadingSpinner size="md" />
         </div>
+      ) : isApiKeyError ? (
+        <ApiErrorDisplay 
+          message={error} 
+          apiName="OpenWeather" 
+          retry={handleRetry}
+        />
       ) : error ? (
-        <ErrorDisplay message={error} compact={true} />
+        <ErrorDisplay message={error} retry={handleRetry} compact={true} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {topCities.map(city => (

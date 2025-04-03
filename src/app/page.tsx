@@ -1,71 +1,54 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useAppDispatch } from '@/redux/hooks';
-import { fetchWeatherData } from '@/redux/slices/weatherSlice';
-import { fetchCryptoData } from '@/redux/slices/cryptoSlice';
-import { fetchNewsData } from '@/redux/slices/newsSlice';
-import { addNotification } from '@/redux/slices/notificationsSlice';
-import { webSocketService } from '@/utils/websocket';
+import Link from 'next/link';
 import MainLayout from '@/components/layout/MainLayout';
 import WeatherSection from '@/components/home/WeatherSection';
 import CryptoSection from '@/components/home/CryptoSection';
 import NewsSection from '@/components/home/NewsSection';
+import { useAppDispatch } from '@/redux/hooks';
+import { startWeatherDataRefresh } from '@/redux/slices/weatherSlice';
+import { startCryptoDataRefresh } from '@/redux/slices/cryptoSlice';
+import { fetchNewsData } from '@/redux/slices/newsSlice';
+import { addNotification } from '@/redux/slices/notificationsSlice';
 
 export default function Home() {
   const dispatch = useAppDispatch();
   
   useEffect(() => {
-    // Initial data fetching
-    dispatch(fetchWeatherData());
-    dispatch(fetchCryptoData());
-    dispatch(fetchNewsData());
+    // Start data refresh every 60 seconds
+    dispatch(startWeatherDataRefresh(60000));
+    dispatch(startCryptoDataRefresh(60000));
+    dispatch(fetchNewsData('crypto'));
     
-    // Initialize WebSocket service
-    webSocketService.init();
+    // Demo notifications
+    dispatch(addNotification({
+      type: 'info',
+      title: 'Welcome to Crypto Weather Nexus',
+      message: 'Stay updated with the latest crypto and weather information.',
+      timestamp: Date.now()
+    }));
     
-    // Set up auto refresh
-    const refreshInterval = setInterval(() => {
-      dispatch(fetchWeatherData());
-      dispatch(fetchCryptoData());
-      dispatch(fetchNewsData('crypto'));
-    }, 60000); // Refresh every 60 seconds
-    
-    // Add demo notifications
-    setTimeout(() => {
-      dispatch(addNotification({
-        type: 'welcome',
-        title: 'Welcome to Crypto Weather Nexus',
-        message: 'Stay updated with the latest cryptocurrency, weather, and news.',
-        timestamp: Date.now(),
-      }));
-    }, 1000);
-    
+    // Add some demo notifications with delay
     setTimeout(() => {
       dispatch(addNotification({
         type: 'weather_alert',
-        title: 'Weather Alert in London',
-        message: 'Heavy rain expected in the next 24 hours.',
-        timestamp: Date.now(),
+        title: 'Weather Alert: New York',
+        message: 'Expect rain in New York City in the next 24 hours.',
+        timestamp: Date.now()
       }));
-    }, 3000);
+    }, 2000);
     
     setTimeout(() => {
       dispatch(addNotification({
         type: 'price_alert',
-        title: 'Bitcoin price alert',
-        message: 'Bitcoin price has increased by 2% in the last hour.',
-        timestamp: Date.now(),
+        title: 'Price Alert: Bitcoin',
+        message: 'Bitcoin price has increased by 2.5% in the last hour.',
+        timestamp: Date.now()
       }));
-    }, 5000);
-
-    // Clean up on unmount
-    return () => {
-      clearInterval(refreshInterval);
-      webSocketService.disconnect();
-    };
+    }, 4000);
   }, [dispatch]);
-
+  
   return (
     <MainLayout>
       <div className="space-y-8">
@@ -75,18 +58,18 @@ export default function Home() {
           <h2 className="text-xl font-bold mb-2">Welcome to Crypto Weather Nexus</h2>
           <p className="mb-4">Your one-stop dashboard for cryptocurrency, weather updates, and relevant news.</p>
           <div className="flex space-x-3">
-            <a 
+            <Link 
               href="/crypto" 
               className="px-4 py-2 bg-white text-indigo-700 font-medium rounded-md hover:bg-gray-100 transition duration-150 ease-in-out"
             >
               Explore Crypto
-            </a>
-            <a 
+            </Link>
+            <Link 
               href="/weather" 
               className="px-4 py-2 border border-white text-white font-medium rounded-md hover:bg-white hover:bg-opacity-10 transition duration-150 ease-in-out"
             >
               Check Weather
-            </a>
+            </Link>
           </div>
         </div>
         

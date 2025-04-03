@@ -7,7 +7,8 @@ import { toggleFavoriteCrypto } from '@/redux/slices/preferencesSlice';
 import MainLayout from '@/components/layout/MainLayout';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
-import { CryptoData } from '@/types';
+import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
+import { CryptoData, CryptoDetail } from '@/types';
 
 // Define an interface for price history data
 interface PriceHistoryItem {
@@ -17,19 +18,27 @@ interface PriceHistoryItem {
 
 export default function CryptoDetailPage({ params }: { params: { cryptoId: string } }) {
   const dispatch = useAppDispatch();
-  const { cryptoId } = params;
-  const { cryptos, loading: detailsLoading, error: detailsError } = useAppSelector(state => state.crypto);
+  const { cryptos, selectedCrypto, loading: detailsLoading, error: detailsError } = useAppSelector(state => state.crypto);
   const { favoriteCryptos } = useAppSelector(state => state.preferences);
   
+  const { cryptoId } = params;
+  
   // Find the crypto in the cryptos array
-  const cryptoDetail = cryptos.find((crypto: CryptoData) => crypto.id === cryptoId);
+  const cryptoOverview = cryptos.find((crypto: CryptoData) => crypto.id === cryptoId);
   const isFavorite = favoriteCryptos.includes(cryptoId);
+  
+  // Check if error is related to API key
+  const isApiKeyError = detailsError && detailsError.toLowerCase().includes('api key');
   
   useEffect(() => {
     if (cryptoId) {
       dispatch(fetchCryptoDetail(cryptoId));
     }
   }, [dispatch, cryptoId]);
+
+  const handleRetry = () => {
+    dispatch(fetchCryptoDetail(cryptoId));
+  };
 
   const formatPrice = (price: number) => {
     if (price < 0.01) {
@@ -61,7 +70,7 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
     dispatch(toggleFavoriteCrypto(cryptoId));
   };
 
-  if (detailsLoading && !cryptoDetail) {
+  if (detailsLoading && !cryptoOverview && !selectedCrypto) {
     return (
       <MainLayout>
         <div className="flex justify-center py-20">
@@ -71,44 +80,54 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
     );
   }
 
-  if (detailsError) {
+  if (isApiKeyError) {
     return (
       <MainLayout>
-        <ErrorDisplay message={detailsError} />
+        <ApiErrorDisplay 
+          message={detailsError} 
+          apiName="CoinGecko" 
+          retry={handleRetry}
+        />
       </MainLayout>
     );
   }
 
-  if (!cryptoDetail) {
+  if (detailsError) {
+    return (
+      <MainLayout>
+        <ErrorDisplay message={detailsError} retry={handleRetry} />
+      </MainLayout>
+    );
+  }
+
+  // If we don't have detailed data or basic data, show not found
+  if (!selectedCrypto && !cryptoOverview) {
     return (
       <MainLayout>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Cryptocurrency not found</h1>
           <p className="text-gray-600 dark:text-gray-300">
-            We couldn't find price data for the requested cryptocurrency.
+            We couldn&apos;t find price data for the requested cryptocurrency.
           </p>
         </div>
       </MainLayout>
     );
   }
   
-  // Prepare mock price history data since we don't have actual history data in the type
-  // In a real app, this would come from the API
-  const mockPriceHistory: PriceHistoryItem[] = Array.from({ length: 24 }, (_, i) => {
-    const time = new Date();
-    time.setHours(time.getHours() - i);
-    // Generate some realistic price fluctuations
-    const randomChange = (Math.random() - 0.5) * (cryptoDetail.price * 0.02); // 2% max change
-    return {
-      timestamp: time.getTime(),
-      price: cryptoDetail.price + randomChange * (i / 24)
-    };
-  }).reverse();
+  // Use the detailed crypto data if available, otherwise fall back to the basic data
+  const cryptoDetail = selectedCrypto || cryptoOverview;
   
-  // Mock volume data for volume chart
-  const volumeData = mockPriceHistory.map(() => {
-    return Math.round(cryptoDetail.price * 100000 * (0.5 + Math.random()));
-  });
+  // Ensure we have a valid cryptoDetail before rendering
+  if (!cryptoDetail) {
+    return (
+      <MainLayout>
+        <ErrorDisplay 
+          message="Unable to display cryptocurrency data" 
+          retry={handleRetry} 
+        />
+      </MainLayout>
+    );
+  }
   
   return (
     <MainLayout>
@@ -116,11 +135,11 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
         <div className="flex flex-col md:flex-row md:items-center justify-between">
           <div className="flex items-center">
             <div className="mr-4 flex-shrink-0 w-12 h-12 bg-indigo-600 dark:bg-indigo-700 rounded-full flex items-center justify-center text-white font-bold">
-              {cryptoDetail.symbol.substring(0, 2).toUpperCase()}
+              {(cryptoDetail.symbol || '').substring(0, 2).toUpperCase()}
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{cryptoDetail.name}</h1>
-              <p className="text-lg text-gray-600 dark:text-gray-300">{cryptoDetail.symbol.toUpperCase()}</p>
+              <p className="text-lg text-gray-600 dark:text-gray-300">{(cryptoDetail.symbol || '').toUpperCase()}</p>
             </div>
           </div>
           <button
@@ -165,7 +184,7 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
                 </span>
               </div>
               <div className="mt-4 md:mt-0 text-sm text-gray-500 dark:text-gray-400">
-                Last updated: {new Date(cryptoDetail.timestamp).toLocaleString()}
+                Last updated: {new Date(('timestamp' in cryptoDetail) ? cryptoDetail.timestamp : Date.now()).toLocaleString()}
               </div>
             </div>
             
@@ -176,229 +195,73 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
                   {formatMarketCap(cryptoDetail.marketCap)}
                 </p>
               </div>
-              <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                <p className="text-xs text-gray-500 dark:text-gray-400">24h Volume</p>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {formatMarketCap(cryptoDetail.marketCap * 0.15)} {/* Mock volume */}
-                </p>
-              </div>
-              <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Circulating Supply</p>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {Math.round(cryptoDetail.marketCap / cryptoDetail.price).toLocaleString()} {cryptoDetail.symbol.toUpperCase()}
-                </p>
-              </div>
-              <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Trading Pairs</p>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {Math.floor(10 + Math.random() * 90)} {/* Mock trading pairs */}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Price Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Price Chart (24h)</h2>
-            
-            <div className="overflow-x-auto">
-              {/* Simple line chart implementation */}
-              <div className="min-h-[180px] w-full bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
-                <div className="relative h-[150px] flex items-end">
-                  {/* Area under the curve */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-opacity-20 rounded-sm" 
-                       style={{
-                         background: `linear-gradient(to top, ${cryptoDetail.priceChange24h >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'} 0%, transparent 100%)`,
-                         height: '100%'
-                       }}
-                  />
-                  
-                  {/* Line chart */}
-                  <div className="flex items-end justify-between w-full h-full relative">
-                    {mockPriceHistory.map((item, i) => {
-                      const maxPrice = Math.max(...mockPriceHistory.map(item => item.price));
-                      const minPrice = Math.min(...mockPriceHistory.map(item => item.price));
-                      const range = maxPrice - minPrice;
-                      const height = ((item.price - minPrice) / (range || 1)) * 95;
-                      
-                      // Only show every 3rd label to avoid overcrowding
-                      const showLabel = i % 3 === 0;
-                      
-                      return (
-                        <div key={i} className="flex flex-col items-center" style={{ height: '100%', flex: '1' }}>
-                          {showLabel && (
-                            <div className="absolute -bottom-6 text-xs text-gray-500 transform -translate-x-1/2">
-                              {new Date(item.timestamp).getHours()}:00
-                            </div>
-                          )}
-                          <div className="relative w-full h-full flex justify-center">
-                            {i > 0 && (
-                              <div 
-                                className={`absolute bottom-0 h-[2px] w-full ${cryptoDetail.priceChange24h >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
-                                style={{ 
-                                  bottom: `${height}%`,
-                                  transform: 'translateY(-50%)',
-                                  width: '100%',
-                                  left: '-50%'
-                                }}
-                              />
-                            )}
-                            <div 
-                              className={`w-2 h-2 rounded-full ${cryptoDetail.priceChange24h >= 0 ? 'bg-green-500' : 'bg-red-500'} absolute`}
-                              style={{ bottom: `${height}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Volume Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Trading Volume (24h)</h2>
-            
-            <div className="overflow-x-auto">
-              {/* Simple bar chart */}
-              <div className="min-h-[150px] w-full bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="h-[120px] flex items-end justify-between">
-                  {volumeData.filter((_, i) => i % 3 === 0).map((volume, index) => {
-                    const maxVolume = Math.max(...volumeData);
-                    const height = (volume / maxVolume) * 100;
-                    return (
-                      <div key={index} className="flex flex-col items-center">
-                        <div 
-                          className="w-6 bg-indigo-500 rounded-t-sm"
-                          style={{ height: `${Math.max(height, 5)}%` }}
-                        ></div>
-                        {index % 2 === 0 && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            {new Date(mockPriceHistory[index * 3].timestamp).getHours()}:00
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Market Information */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Market Information</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="mb-4">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Market Dominance</span>
-                    <span className="text-sm font-medium text-gray-800 dark:text-white">
-                      {(cryptoDetail.marketCap / 1000000000000).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-indigo-600 h-2 rounded-full" 
-                      style={{ width: `${Math.min(100, cryptoDetail.marketCap / 10000000000)}%` }}
-                    ></div>
-                  </div>
-                </div>
-                
-                <div className="mb-4">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">All-Time High</span>
-                    <span className="text-sm font-medium text-gray-800 dark:text-white">
-                      {formatPrice(cryptoDetail.price * 1.5)} {/* Mock ATH */}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toLocaleDateString()} 
-                    ({formatPercentage((cryptoDetail.price * 1.5 - cryptoDetail.price) / (cryptoDetail.price * 1.5) * 100)})
-                  </div>
-                </div>
-                
-                <div className="mb-4">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">All-Time Low</span>
-                    <span className="text-sm font-medium text-gray-800 dark:text-white">
-                      {formatPrice(cryptoDetail.price * 0.1)} {/* Mock ATL */}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(Date.now() - 700 * 24 * 60 * 60 * 1000).toLocaleDateString()} 
-                    ({formatPercentage((cryptoDetail.price - cryptoDetail.price * 0.1) / (cryptoDetail.price * 0.1) * 100)})
-                  </div>
-                </div>
-              </div>
               
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-3">Price Changes</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">1h</span>
-                    <span className={`text-sm font-medium ${
-                      (Math.random() - 0.3) > 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {formatPercentage((Math.random() - 0.3) * 2)}
-                    </span>
+              {selectedCrypto && (
+                <>
+                  <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">24h Volume</p>
+                    <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                      {formatMarketCap(selectedCrypto.volume24h || 0)}
+                    </p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">24h</span>
-                    <span className={`text-sm font-medium ${
-                      cryptoDetail.priceChange24h >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {formatPercentage(cryptoDetail.priceChange24h)}
-                    </span>
+                  <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Circulating Supply</p>
+                    <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                      {selectedCrypto.circulatingSupply?.toLocaleString() || 'N/A'} {(cryptoDetail.symbol || '').toUpperCase()}
+                    </p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">7d</span>
-                    <span className={`text-sm font-medium ${
-                      (Math.random() - 0.3) > 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {formatPercentage((Math.random() - 0.3) * 10)}
-                    </span>
+                  <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">All Time High</p>
+                    <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                      {selectedCrypto.allTimeHigh ? formatPrice(selectedCrypto.allTimeHigh) : 'N/A'}
+                    </p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">30d</span>
-                    <span className={`text-sm font-medium ${
-                      (Math.random() - 0.2) > 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {formatPercentage((Math.random() - 0.2) * 30)}
-                    </span>
+                </>
+              )}
+              
+              {!selectedCrypto && (
+                <>
+                  <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg col-span-3">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Detailed data unavailable. Use the retry button or check your API key to view detailed information.
+                    </p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">1y</span>
-                    <span className={`text-sm font-medium ${
-                      (Math.random() + 0.3) > 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {formatPercentage((Math.random() + 0.3) * 100)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>
+        
+        {/* Price Chart Section */}
+        {selectedCrypto && selectedCrypto.history && selectedCrypto.history.length > 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Price History (30 Days)</h2>
+            <div className="h-64 w-full">
+              {/* This is where a real chart would be rendered using the history data */}
+              <div className="bg-gray-100 dark:bg-gray-700 h-full rounded-lg flex items-center justify-center">
+                <p className="text-gray-500 dark:text-gray-400">
+                  Historical price chart would render here using {selectedCrypto.history.length} real data points
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Price History</h2>
+            <div className="bg-gray-100 dark:bg-gray-700 h-64 rounded-lg flex items-center justify-center">
+              <p className="text-gray-500 dark:text-gray-400 text-center px-4">
+                Historical price data is unavailable. Please check your API connection or retry.
+                <br />
+                <button 
+                  onClick={handleRetry}
+                  className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  Retry
+                </button>
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </MainLayout>
   );

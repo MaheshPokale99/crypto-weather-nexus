@@ -230,76 +230,79 @@ const createMockCityDetail = (cityId: string): CityDetail => {
   };
 };
 
-export const searchCityByName = createAsyncThunk(
+export const searchCityByName = createAsyncThunk<WeatherData, string, { rejectValue: string }>(
   'weather/searchCityByName',
   async (cityName: string, { rejectWithValue }) => {
     try {
       // Check if API key is available in environment variables
       const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
       if (!apiKey) {
-        console.warn('OpenWeather API key is missing. Using mock data.');
-        return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
+        console.warn('OpenWeather API key is missing.');
+        return rejectWithValue('API key not found. Please provide a valid OpenWeather API key.');
       }
       
-      const response = await axios.get(`${API_BASE_URL}/weather`, {
-        params: {
-          q: cityName,
-          appid: apiKey,
-          units: 'metric'
+      try {
+        const response = await axios.get(`${API_BASE_URL}/weather`, {
+          params: {
+            q: cityName,
+            appid: apiKey,
+            units: 'metric'
+          }
+        });
+        
+        const data = response.data;
+        return {
+          cityId: data.id.toString(),
+          name: data.name,
+          country: data.sys.country,
+          temperature: data.main.temp,
+          humidity: data.main.humidity,
+          conditions: data.weather[0].main,
+          description: data.weather[0].description,
+          icon: data.weather[0].icon,
+          windSpeed: data.wind.speed,
+          pressure: data.main.pressure,
+          visibility: data.visibility,
+          timestamp: Date.now(),
+        } as WeatherData;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          // Handle specific error codes
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            return rejectWithValue('API key is invalid or unauthorized. Please check your OpenWeather API key.');
+          }
+          
+          if (error.response?.status === 404) {
+            return rejectWithValue(`City "${cityName}" not found. Please try another city name.`);
+          }
+          
+          if (error.response?.status === 429) {
+            return rejectWithValue('OpenWeather API rate limit exceeded. Please try again later.');
+          }
+          
+          console.error('Error searching for city:', error.message);
+          return rejectWithValue(`Failed to search for "${cityName}". ${error.message}`);
         }
-      });
-      
-      const data = response.data;
-      return {
-        cityId: data.id.toString(),
-        name: data.name,
-        country: data.sys.country,
-        temperature: data.main.temp,
-        humidity: data.main.humidity,
-        conditions: data.weather[0].main,
-        description: data.weather[0].description,
-        icon: data.weather[0].icon,
-        windSpeed: data.wind.speed,
-        pressure: data.main.pressure,
-        visibility: data.visibility,
-        timestamp: Date.now(),
-      } as WeatherData;
+        
+        console.error('Error searching for city:', error);
+        return rejectWithValue(`Failed to search for "${cityName}". Please try again later.`);
+      }
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        // Handle specific error codes
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          console.warn('OpenWeather API key is invalid or unauthorized. Using mock data.');
-          return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
-        }
-        
-        if (error.response?.status === 404) {
-          return rejectWithValue(`City "${cityName}" not found. Please try another city name.`);
-        }
-        
-        if (error.response?.status === 429) {
-          console.warn('OpenWeather API rate limit exceeded. Using mock data.');
-          return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
-        }
-        
-        console.error('Error searching for city:', error.message);
-        return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
-      }
-      
-      console.error('Error searching for city:', error);
-      return rejectWithValue(`Failed to search for "${cityName}". Please try again later.`);
+      console.error('Unexpected error in searchCityByName:', error);
+      return rejectWithValue(`An unexpected error occurred while searching for "${cityName}".`);
     }
   }
 );
 
-export const fetchWeatherData = createAsyncThunk(
+export const fetchWeatherData = createAsyncThunk<WeatherData[], void, { rejectValue: string }>(
   'weather/fetchWeatherData',
   async (_, { rejectWithValue }) => {
     try {
       // Check if API key is available in environment variables
       const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
       if (!apiKey) {
-        console.warn('OpenWeather API key is missing. Using mock data.');
-        return mockWeatherData;
+        console.warn('OpenWeather API key is missing.');
+        return rejectWithValue('API key not found. Please provide a valid OpenWeather API key.');
       }
       
       const weatherPromises = defaultCities.map(async (city) => {
@@ -326,54 +329,49 @@ export const fetchWeatherData = createAsyncThunk(
             pressure: data.main.pressure,
             visibility: data.visibility,
             timestamp: Date.now(),
-          };
+          } as WeatherData;
         } catch (err) {
           if (axios.isAxiosError(err)) {
-            // Handle specific error codes
-            if (err.response?.status === 401 || err.response?.status === 403) {
-              console.warn(`OpenWeather API key is invalid or unauthorized for ${city.name}. Using mock data.`);
-              return mockWeatherData.find(w => w.cityId === city.id);
-            }
-            
-            if (err.response?.status === 429) {
-              console.warn(`OpenWeather API rate limit exceeded for ${city.name}. Using mock data.`);
-              return mockWeatherData.find(w => w.cityId === city.id);
-            }
+            console.error(`Failed to fetch weather for ${city.name}:`, err.message);
+            throw err; // Rethrow to be caught by the outer catch
           }
-          
-          console.error(`Failed to fetch weather for ${city.name}:`, err);
-          // Return mock data for this city
-          return mockWeatherData.find(w => w.cityId === city.id);
+          throw err;
         }
       });
       
-      const results = await Promise.all(weatherPromises);
-      // Filter out any null values (should never happen now, since we return mock data)
-      const validResults = results.filter(result => result !== null) as WeatherData[];
-      
-      if (validResults.length === 0) {
-        console.warn('No valid weather data found. Using all mock data.');
-        return mockWeatherData;
+      try {
+        const results = await Promise.all(weatherPromises);
+        return results;
+      } catch (fetchError) {
+        if (axios.isAxiosError(fetchError)) {
+          // Handle specific error codes
+          if (fetchError.response?.status === 401 || fetchError.response?.status === 403) {
+            return rejectWithValue('API key is invalid or unauthorized. Please check your OpenWeather API key.');
+          }
+          
+          if (fetchError.response?.status === 429) {
+            return rejectWithValue('OpenWeather API rate limit exceeded. Please try again later.');
+          }
+        }
+        
+        return rejectWithValue('Unable to fetch weather data. Please check your connection and try again.');
       }
-      
-      return validResults;
     } catch (error) {
       console.error('Error fetching weather data:', error);
-      // Fall back to mock data for complete failure
-      return mockWeatherData;
+      return rejectWithValue('An unexpected error occurred while fetching weather data.');
     }
   }
 );
 
-export const fetchCityDetail = createAsyncThunk(
+export const fetchCityDetail = createAsyncThunk<CityDetail, string, { rejectValue: string }>(
   'weather/fetchCityDetail',
   async (cityId: string, { rejectWithValue }) => {
     try {
       // Check if API key is available in environment variables
       const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
       if (!apiKey) {
-        console.warn('OpenWeather API key is missing. Using mock data.');
-        return createMockCityDetail(cityId);
+        console.warn('OpenWeather API key is missing.');
+        return rejectWithValue('API key not found. Please provide a valid OpenWeather API key.');
       }
       
       try {
@@ -436,27 +434,24 @@ export const fetchCityDetail = createAsyncThunk(
         if (axios.isAxiosError(err)) {
           // Handle specific error codes
           if (err.response?.status === 401 || err.response?.status === 403) {
-            console.warn('OpenWeather API key is invalid or unauthorized. Using mock data.');
-            return createMockCityDetail(cityId);
+            return rejectWithValue('API key is invalid or unauthorized. Please check your OpenWeather API key.');
           }
           
           if (err.response?.status === 404) {
-            console.warn(`City details for ID ${cityId} not found. Using mock data.`);
-            return createMockCityDetail(cityId);
+            return rejectWithValue(`City with ID '${cityId}' not found. Please check the ID and try again.`);
           }
           
           if (err.response?.status === 429) {
-            console.warn('OpenWeather API rate limit exceeded. Using mock data.');
-            return createMockCityDetail(cityId);
+            return rejectWithValue('OpenWeather API rate limit exceeded. Please try again later.');
           }
         }
         
         console.error('Error fetching city detail:', err);
-        return createMockCityDetail(cityId);
+        return rejectWithValue('Failed to fetch city details. The API may be unavailable.');
       }
     } catch (error) {
       console.error('Error in fetchCityDetail flow:', error);
-      return createMockCityDetail(cityId);
+      return rejectWithValue('An unexpected error occurred while fetching city details.');
     }
   }
 );

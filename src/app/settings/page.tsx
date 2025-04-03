@@ -9,7 +9,6 @@ import {
   updateRefreshInterval
 } from '@/redux/slices/preferencesSlice';
 import MainLayout from '@/components/layout/MainLayout';
-import ThemeToggle from '@/components/ui/ThemeToggle';
 
 export default function SettingsPage() {
   const dispatch = useAppDispatch();

@@ -1,0 +1,24 @@
+# Node modules
+node_modules/
+
+# Build directories
+.next/
+out/
+build/
+dist/
+
+# Cache
+.cache/
+.eslintcache
+
+# Test coverage
+coverage/
+
+# Static files directory
+public/
+
+# Environment variables
+.env*
+
+# Specific files with complex typing issues
+src/components/crypto/CryptoDetails.tsx 

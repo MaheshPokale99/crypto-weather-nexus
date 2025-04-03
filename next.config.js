@@ -15,6 +15,9 @@ const nextConfig = {
     // your project has TypeScript errors.
     ignoreBuildErrors: true,
   },
+  env: {
+    NEXT_PUBLIC_ALLOW_MOCK_DATA: 'true'
+  }
 };
 
 module.exports = nextConfig; 

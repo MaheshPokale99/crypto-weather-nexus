@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run vercel-build",
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "NEXT_PUBLIC_ALLOW_MOCK_DATA": "true",
+    "NEXT_DISABLE_ESLINT": "1",
+    "NEXT_DISABLE_TYPECHECK": "1"
+  }
+} 

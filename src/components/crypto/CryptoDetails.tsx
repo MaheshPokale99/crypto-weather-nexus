@@ -17,12 +17,13 @@ import {
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-export interface CryptoDetailsProps {
+interface CryptoDetailsProps {
   crypto: CryptoDetail;
+  onFavoriteToggle: () => void;
   isFavorite: boolean;
 }
 
-const CryptoDetails: React.FC<CryptoDetailsProps> = ({ crypto, isFavorite }) => {
+const CryptoDetails: React.FC<CryptoDetailsProps> = ({ crypto, onFavoriteToggle, isFavorite }) => {
   const [chartPeriod, setChartPeriod] = useState<'1d' | '7d' | '30d'>('7d');
 
   const formatCurrency = (value: number) => {

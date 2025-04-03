@@ -74,7 +74,7 @@ const getMockCryptoData = (): CryptoData[] => {
 };
 
 // Fetch cryptocurrency data from CoinGecko API
-export const fetchCryptoData = createAsyncThunk(
+export const fetchCryptoData = createAsyncThunk<CryptoData[], void, { rejectValue: string }>(
   'crypto/fetchCryptoData',
   async (_, { rejectWithValue }) => {
     try {
@@ -83,12 +83,12 @@ export const fetchCryptoData = createAsyncThunk(
       let retries = 0;
       
       // Function to retry with exponential backoff
-      const fetchWithRetry = async (): Promise<CryptoData[]> => {
+      const fetchWithRetry = async () => {
         try {
           // Check if API key is available in environment variables
           if (!process.env.NEXT_PUBLIC_COINGECKO_API_KEY) {
-            console.warn('CoinGecko API key is missing. Using fallback data.');
-            return getMockCryptoData();
+            console.warn('CoinGecko API key is missing.');
+            return rejectWithValue('API key not found. Please provide a valid CoinGecko API key.') as any;
           }
           
           try {
@@ -129,8 +129,7 @@ export const fetchCryptoData = createAsyncThunk(
             if (axios.isAxiosError(error)) {
               // If 401 unauthorized or 403 forbidden, API key is invalid
               if (error.response?.status === 401 || error.response?.status === 403) {
-                console.warn('API key is invalid or unauthorized. Using fallback data.');
-                return getMockCryptoData();
+                return rejectWithValue('API key is invalid or unauthorized. Please check your CoinGecko API key.') as any;
               }
               
               // If we get a 429 (rate limit) error and haven't exceeded max retries
@@ -144,15 +143,18 @@ export const fetchCryptoData = createAsyncThunk(
                 // Try again after waiting
                 return fetchWithRetry();
               }
+              
+              if (error.response?.status === 429) {
+                return rejectWithValue('API rate limit exceeded. Please try again later.') as any;
+              }
             }
             
-            // For any other error, use mock data as fallback
-            console.warn('Using fallback crypto data due to API error');
-            return getMockCryptoData();
+            // For any other error
+            return rejectWithValue('Unable to fetch cryptocurrency data. Please check your connection and try again.') as any;
           }
         } catch (error) {
           console.error('Unexpected error in fetchWithRetry:', error);
-          return getMockCryptoData();
+          return rejectWithValue('An unexpected error occurred while fetching cryptocurrency data.') as any;
         }
       };
       
@@ -165,14 +167,20 @@ export const fetchCryptoData = createAsyncThunk(
 );
 
 // Fetch cryptocurrency details including historical data
-export const fetchCryptoDetail = createAsyncThunk(
+export const fetchCryptoDetail = createAsyncThunk<CryptoDetail, string, { rejectValue: string }>(
   'crypto/fetchDetail',
   async (cryptoId: string, { rejectWithValue }) => {
     try {
-      // Prepare API request config with API key if available
-      const apiKeyParam = hasCoinGeckoAPIKey ? {
+      // Check if API key is available
+      if (!process.env.NEXT_PUBLIC_COINGECKO_API_KEY) {
+        console.warn('CoinGecko API key is missing.');
+        return rejectWithValue('API key not found. Please provide a valid CoinGecko API key.');
+      }
+      
+      // Prepare API request config with API key
+      const apiKeyParam = {
         x_cg_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
-      } : {};
+      };
       
       const historyParams = {
         vs_currency: 'usd',
@@ -191,7 +199,7 @@ export const fetchCryptoDetail = createAsyncThunk(
             community_data: false,
             developer_data: false,
             sparkline: false,
-            ...(hasCoinGeckoAPIKey ? { x_cg_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY } : {})
+            x_cg_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
           }
         });
         
@@ -226,6 +234,21 @@ export const fetchCryptoDetail = createAsyncThunk(
         return detailedCrypto;
       } catch (apiError) {
         console.warn('CoinGecko API error for details:', apiError);
+        
+        if (axios.isAxiosError(apiError)) {
+          if (apiError.response?.status === 401 || apiError.response?.status === 403) {
+            return rejectWithValue('API key is invalid or unauthorized. Please check your CoinGecko API key.');
+          }
+          
+          if (apiError.response?.status === 404) {
+            return rejectWithValue(`Cryptocurrency '${cryptoId}' not found. Please check the ID and try again.`);
+          }
+          
+          if (apiError.response?.status === 429) {
+            return rejectWithValue('API rate limit exceeded. Please try again later.');
+          }
+        }
+        
         return rejectWithValue('Failed to fetch cryptocurrency details. The API may be rate limited or unavailable.');
       }
     } catch (error) {

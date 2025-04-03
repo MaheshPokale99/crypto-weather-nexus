@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "node vercel-build.js",
     "clean-build": "node clean-build.js",
     "start": "next start",
     "lint": "next lint"

@@ -7,32 +7,32 @@ import { toggleFavoriteCity } from '@/redux/slices/preferencesSlice';
 import MainLayout from '@/components/layout/MainLayout';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
-import { WeatherData } from '@/types';
-
-// Define an interface for forecast data
-interface ForecastItem {
-  timestamp: number;
-  temperature: number;
-  humidity: number;
-  conditions: string;
-  icon: string;
-}
+import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
+import { WeatherData, CityDetail } from '@/types';
 
 export default function WeatherDetailPage({ params }: { params: { cityId: string } }) {
   const dispatch = useAppDispatch();
-  const { cityId } = params;
-  const { cities, loading: detailsLoading, error: detailsError } = useAppSelector(state => state.weather);
+  const { cities, selectedCity, loading: detailsLoading, error: detailsError } = useAppSelector(state => state.weather);
   const { favoriteCities, temperatureUnit } = useAppSelector(state => state.preferences);
   
+  const { cityId } = params;
+  
   // Find the city in the cities array
-  const cityDetail = cities.find((city: WeatherData) => city.cityId === cityId);
+  const cityBasicInfo = cities.find((city: WeatherData) => city.cityId === cityId);
   const isFavorite = favoriteCities.includes(cityId);
+  
+  // Check if error is related to API key
+  const isApiKeyError = detailsError && detailsError.toLowerCase().includes('api key');
   
   useEffect(() => {
     if (cityId) {
       dispatch(fetchCityDetail(cityId));
     }
   }, [dispatch, cityId]);
+
+  const handleRetry = () => {
+    dispatch(fetchCityDetail(cityId));
+  };
 
   const convertTemp = (celsius: number) => {
     if (temperatureUnit === 'fahrenheit') {
@@ -50,11 +50,16 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
     return `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
   };
   
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  
   const handleFavoriteToggle = () => {
     dispatch(toggleFavoriteCity(cityId));
   };
 
-  if (detailsLoading && !cityDetail) {
+  if (detailsLoading && !cityBasicInfo && !selectedCity) {
     return (
       <MainLayout>
         <div className="flex justify-center py-20">
@@ -64,48 +69,95 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
     );
   }
 
-  if (detailsError) {
+  if (isApiKeyError) {
     return (
       <MainLayout>
-        <ErrorDisplay message={detailsError} />
+        <ApiErrorDisplay 
+          message={detailsError} 
+          apiName="OpenWeather" 
+          retry={handleRetry}
+        />
       </MainLayout>
     );
   }
 
-  if (!cityDetail) {
+  if (detailsError) {
+    return (
+      <MainLayout>
+        <ErrorDisplay message={detailsError} retry={handleRetry} />
+      </MainLayout>
+    );
+  }
+
+  if (!cityBasicInfo && !selectedCity) {
     return (
       <MainLayout>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">City not found</h1>
           <p className="text-gray-600 dark:text-gray-300">
-            We couldn't find weather data for the requested city.
+            We couldn&apos;t find weather data for the requested city.
           </p>
         </div>
       </MainLayout>
     );
   }
   
-  // Prepare mock forecast data since we don't have actual forecast data in the type
-  // In a real app, this would come from the API
-  const mockForecast: ForecastItem[] = Array.from({ length: 8 }, (_, i) => {
-    const time = new Date();
-    time.setHours(time.getHours() + i * 3);
-    return {
-      timestamp: time.getTime(),
-      temperature: cityDetail.temperature - 2 + Math.random() * 4,
-      humidity: cityDetail.humidity - 5 + Math.random() * 10,
-      conditions: cityDetail.conditions,
-      icon: cityDetail.icon
+  // Use either the detailed data or basic data
+  const city = selectedCity || cityBasicInfo;
+  
+  // Ensure we have a valid city before rendering
+  if (!city) {
+    return (
+      <MainLayout>
+        <ErrorDisplay 
+          message="Unable to display weather data" 
+          retry={handleRetry} 
+        />
+      </MainLayout>
+    );
+  }
+  
+  // Helper function to get current weather data correctly based on the type
+  const getWeatherData = () => {
+    // Type guard function to check if it's a CityDetail
+    const isCityDetail = (data: WeatherData | CityDetail): data is CityDetail => {
+      return 'currentWeather' in data;
     };
-  });
+    
+    if (isCityDetail(city)) {
+      // It's a CityDetail
+      return {
+        temperature: city.currentWeather?.temperature ?? 0,
+        feelsLike: city.currentWeather?.feelsLike,
+        humidity: city.currentWeather?.humidity ?? 0,
+        conditions: city.currentWeather?.conditions ?? 'Unknown',
+        icon: city.currentWeather?.icon ?? '01d',
+        windSpeed: city.currentWeather?.windSpeed,
+        pressure: city.currentWeather?.pressure,
+      };
+    } else {
+      // It's a WeatherData
+      return {
+        temperature: city.temperature,
+        feelsLike: undefined,
+        humidity: city.humidity,
+        conditions: city.conditions,
+        icon: city.icon,
+        windSpeed: city.windSpeed,
+        pressure: city.pressure,
+      };
+    }
+  };
+  
+  const weatherData = getWeatherData();
   
   return (
     <MainLayout>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{cityDetail.name}</h1>
-            <p className="text-lg text-gray-600 dark:text-gray-300">{cityDetail.country}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{city.name}</h1>
+            <p className="text-lg text-gray-600 dark:text-gray-300">{city.country}</p>
           </div>
           <button
             onClick={handleFavoriteToggle}
@@ -138,16 +190,16 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
             <div className="flex flex-col md:flex-row items-center">
               <div className="flex items-center justify-center md:justify-start mb-4 md:mb-0">
                 <img 
-                  src={getWeatherIcon(cityDetail.icon)} 
-                  alt={cityDetail.conditions} 
+                  src={getWeatherIcon(weatherData.icon)} 
+                  alt={weatherData.conditions} 
                   className="w-20 h-20"
                 />
                 <div className="ml-4">
                   <p className="text-4xl font-bold text-gray-900 dark:text-white">
-                    {formatTemperature(cityDetail.temperature)}
+                    {formatTemperature(weatherData.temperature)}
                   </p>
                   <p className="text-lg font-medium text-gray-600 dark:text-gray-300">
-                    {cityDetail.conditions}
+                    {weatherData.conditions}
                   </p>
                 </div>
               </div>
@@ -156,141 +208,68 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
                 <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">Feels Like</p>
                   <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                    {formatTemperature(cityDetail.temperature - 1 + Math.random() * 2)}
+                    {formatTemperature(weatherData.feelsLike || weatherData.temperature)}
                   </p>
                 </div>
                 <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">Humidity</p>
-                  <p className="text-lg font-semibold text-gray-800 dark:text-white">{cityDetail.humidity}%</p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-white">{weatherData.humidity}%</p>
                 </div>
                 <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">Wind</p>
-                  <p className="text-lg font-semibold text-gray-800 dark:text-white">{cityDetail.windSpeed || '5'} km/h</p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-white">{weatherData.windSpeed || '—'} km/h</p>
                 </div>
                 <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-gray-500 dark:text-gray-400">Pressure</p>
-                  <p className="text-lg font-semibold text-gray-800 dark:text-white">{cityDetail.pressure || '1015'} hPa</p>
+                  <p className="text-lg font-semibold text-gray-800 dark:text-white">{weatherData.pressure || '—'} hPa</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
         
-        {/* 24-Hour Forecast */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">24-Hour Forecast</h2>
-            
-            {mockForecast.length > 0 ? (
+        {/* Forecast Section */}
+        {selectedCity && selectedCity.history && selectedCity.history.length > 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Weather History</h2>
+              
               <div className="overflow-x-auto">
-                {/* Simple chart visualization */}
-                <div className="min-h-[180px] w-full bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
-                  <div className="h-[150px] flex items-end justify-between">
-                    {mockForecast.map((item, index) => {
-                      const height = (item.temperature / 35) * 100;
-                      const color = item.temperature > 25 ? 'bg-red-500' : item.temperature > 15 ? 'bg-orange-400' : 'bg-blue-500';
-                      return (
-                        <div key={index} className="flex flex-col items-center">
-                          <div className="text-xs text-gray-500 mb-1">
-                            {Math.round(item.temperature)}°
-                          </div>
-                          <div 
-                            className={`w-6 ${color} rounded-t-sm relative`} 
-                            style={{ height: `${Math.max(height, 10)}%` }}
-                          ></div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div className="mt-6 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-8 gap-4">
-                  {mockForecast.map((item, index) => (
-                    <div key={index} className="flex flex-col items-center">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </span>
+                <div className="flex space-x-4 pb-2">
+                  {selectedCity.history.map((item, index) => (
+                    <div key={index} className="flex-shrink-0 w-24 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{formatTime(item.timestamp)}</p>
                       <img 
-                        src={getWeatherIcon(item.icon)} 
+                        src={getWeatherIcon(item.icon || '01d')} 
                         alt={item.conditions} 
-                        className="w-10 h-10 my-1"
+                        className="w-10 h-10 mx-auto my-1"
                       />
-                      <span className="text-sm font-medium text-gray-800 dark:text-white">
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white">
                         {formatTemperature(item.temperature)}
-                      </span>
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{item.humidity}%</p>
                     </div>
                   ))}
                 </div>
               </div>
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400 text-center py-4">
-                Forecast data not available
-              </p>
-            )}
-          </div>
-        </div>
-        
-        {/* Additional Weather Details */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Detailed Information</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Sunrise</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {new Date(new Date().setHours(6, 30)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Sunset</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {new Date(new Date().setHours(19, 45)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Visibility</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {cityDetail.visibility ? `${(cityDetail.visibility / 1000).toFixed(1)} km` : '10.0 km'}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">UV Index</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {Math.floor(Math.random() * 8)}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Cloud Cover</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {`${Math.floor(Math.random() * 100)}%`}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Dew Point</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {formatTemperature(cityDetail.temperature - 3 - Math.random() * 2)}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Wind Direction</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {`${Math.floor(Math.random() * 360)}°`}
-                </p>
-              </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Wind Gust</h3>
-                <p className="text-lg font-semibold text-gray-800 dark:text-white">
-                  {`${Math.floor(5 + Math.random() * 10)} km/h`}
-                </p>
-              </div>
             </div>
           </div>
-        </div>
-        
-        <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
-          Last updated: {new Date(cityDetail.timestamp).toLocaleString()}
-        </div>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Weather History</h2>
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-6 text-center">
+              <p className="text-gray-500 dark:text-gray-400">
+                Detailed historical data is unavailable. Please check your API connection or retry.
+              </p>
+              <button 
+                onClick={handleRetry}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </MainLayout>
   );

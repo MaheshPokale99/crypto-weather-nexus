@@ -2,16 +2,26 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useAppSelector } from '@/redux/hooks';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import CryptoCard from '@/components/crypto/CryptoCard';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
+import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
+import { fetchCryptoData } from '@/redux/slices/cryptoSlice';
 
 const CryptoSection: React.FC = () => {
   const { cryptos, loading, error } = useAppSelector(state => state.crypto);
+  const dispatch = useAppDispatch();
   
   // Take only the top 3 cryptos for the home page section
   const topCryptos = Array.isArray(cryptos) ? cryptos.slice(0, 3) : [];
+  
+  // Check if error is related to API key
+  const isApiKeyError = error && error.toLowerCase().includes('api key');
+  
+  const handleRetry = () => {
+    dispatch(fetchCryptoData());
+  };
   
   return (
     <section className="mb-10">
@@ -29,8 +39,14 @@ const CryptoSection: React.FC = () => {
         <div className="flex justify-center py-12">
           <LoadingSpinner size="md" />
         </div>
+      ) : isApiKeyError ? (
+        <ApiErrorDisplay 
+          message={error} 
+          apiName="CoinGecko" 
+          retry={handleRetry}
+        />
       ) : error ? (
-        <ErrorDisplay message={error} compact={true} />
+        <ErrorDisplay message={error} retry={handleRetry} compact={true} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {topCryptos.map(crypto => (
