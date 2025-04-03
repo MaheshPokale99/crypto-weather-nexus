@@ -58,6 +58,70 @@ A Next.js application that aggregates cryptocurrency data, weather information, 
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Deployment
+
+### Building for Production
+
+To build the application for production:
+
+```bash
+npm run build
+```
+
+If you encounter permissions errors during the build process, try running it with admin privileges or verify folder permissions.
+
+### Deployment Options
+
+1. **Vercel (Recommended)** - Easiest option for Next.js applications:
+   - Sign up for a [Vercel account](https://vercel.com)
+   - Connect your GitHub repository
+   - Vercel will automatically detect the Next.js application and deploy it
+   - Configure your environment variables in the Vercel dashboard
+
+2. **Netlify**:
+   - Create a new site from your GitHub repository
+   - Configure the build command as `npm run build`
+   - Set the publish directory to `.next`
+   - Add your environment variables in the site settings
+
+3. **Self-hosting**:
+   - Build the application: `npm run build`
+   - Start the production server: `npm start`
+   - Use a process manager like PM2 to keep the application running
+
+### Environment Variables for Production
+
+Ensure the following environment variables are set in your production environment:
+- `NEXT_PUBLIC_OPENWEATHER_API_KEY`
+- `NEXT_PUBLIC_COINGECKO_API_KEY`
+- `NEXT_PUBLIC_NEWSDATA_API_KEY`
+
+## Troubleshooting
+
+### Common Build Issues
+
+1. **API Key Missing Errors**:
+   - Ensure all API keys are set in your `.env.local` file
+   - For production builds, verify environment variables are properly configured
+
+2. **Permission Issues**:
+   - If you encounter EPERM errors during build, try:
+     - Running the command with admin privileges
+     - Checking folder permissions
+     - Deleting the `.next` folder and trying again
+
+3. **ESLint Errors**:
+   - Most ESLint errors should be automatically fixed by our configuration
+   - For persistent errors, see the ESLint configuration in `.eslintrc.json`
+
+4. **Chart Rendering Issues**:
+   - The application implements a fallback for Chart.js rendering
+   - Charts will display as simple alternatives when the library isn't available
+
+5. **WebSocket Connections**:
+   - In environments where WebSockets aren't supported, the app will fall back to simulated data
+   - If CoinCap API rate limits are hit, mock data will be used instead
+
 ## API Rate Limits
 
 This application uses several external APIs, which have rate limits:
@@ -106,6 +170,17 @@ crypto-weather-nexus/
 - WebSocket connections may fail in some environments
 - Some mock data is used when APIs are unavailable
 
+## Browser Support
+
+The application is optimized for modern browsers:
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 

@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../store';
 import axios from 'axios';
-import { CryptoState, CryptoData, CryptoHistoryData, CryptoDetail } from '@/types';
+import { CryptoState, CryptoData, CryptoDetail } from '@/types';
 
 // State interface extension for local use
 interface DetailedCryptoState extends CryptoState {
@@ -76,7 +76,7 @@ const getMockCryptoData = (): CryptoData[] => {
 // Fetch cryptocurrency data from CoinGecko API
 export const fetchCryptoData = createAsyncThunk(
   'crypto/fetchCryptoData',
-  async (_, { rejectWithValue, dispatch }) => {
+  async (_, { rejectWithValue }) => {
     try {
       // Maximum number of retries
       const MAX_RETRIES = 3;
