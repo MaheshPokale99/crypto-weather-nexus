@@ -104,7 +104,17 @@ export const fetchCryptoData = createAsyncThunk(
             }
           });
           
-          return response.data.map((coin: any) => ({
+          // Define the coin data interface
+          interface CoinGeckoApiResponse {
+            id: string;
+            symbol: string;
+            name: string;
+            current_price: number;
+            price_change_percentage_24h: number | null;
+            market_cap: number;
+          }
+          
+          return response.data.map((coin: CoinGeckoApiResponse) => ({
             id: coin.id,
             symbol: coin.symbol,
             name: coin.name,
@@ -148,21 +158,15 @@ export const fetchCryptoDetail = createAsyncThunk(
   async (cryptoId: string, { rejectWithValue }) => {
     try {
       // Prepare API request config with API key if available
-      const requestConfig = hasCoinGeckoAPIKey ? {
-        params: {
-          x_cg_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
-        }
+      const apiKeyParam = hasCoinGeckoAPIKey ? {
+        x_cg_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
       } : {};
       
-      const historyParams = hasCoinGeckoAPIKey ? {
+      const historyParams = {
         vs_currency: 'usd',
         days: 30,
         interval: 'daily',
-        x_cg_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
-      } : {
-        vs_currency: 'usd',
-        days: 30,
-        interval: 'daily'
+        ...apiKeyParam
       };
       
       try {

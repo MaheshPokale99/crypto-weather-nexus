@@ -1,16 +1,7 @@
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 import { store } from '@/redux/store';
 import { updateCryptoPrice } from '@/redux/slices/cryptoSlice';
 import { addNotification } from '@/redux/slices/notificationsSlice';
-
-// Define interface for message from CoinCap WebSocket
-interface CoinCapMessage {
-  priceUsd: string;
-  id: string;
-  symbol: string;
-  name: string;
-  percent_change_24hr: string;
-}
 
 // Define interface for simulated weather alert
 interface WeatherAlert {

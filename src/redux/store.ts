@@ -4,7 +4,6 @@ import cryptoReducer from './slices/cryptoSlice';
 import newsReducer from './slices/newsSlice';
 import preferencesReducer from './slices/preferencesSlice';
 import notificationsReducer from './slices/notificationsSlice';
-import { AppState } from '@/types';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +13,10 @@ export const store = configureStore({
     preferences: preferencesReducer,
     notifications: notificationsReducer,
   },
+  middleware: (getDefaultMiddleware) => 
+    getDefaultMiddleware({
+      serializableCheck: false, // Disable serializableCheck for interval IDs
+    }),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

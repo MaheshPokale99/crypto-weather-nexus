@@ -23,6 +23,25 @@ const defaultCities = [
 // OpenWeather API configuration
 const API_BASE_URL = 'https://api.openweathermap.org/data/2.5';
 
+// Define type for forecast data item
+interface ForecastDataItem {
+  dt: number;
+  main: {
+    temp: number;
+    feels_like: number;
+    humidity: number;
+    pressure: number;
+  };
+  weather: Array<{
+    main: string;
+    description: string;
+    icon: string;
+  }>;
+  wind: {
+    speed: number;
+  };
+}
+
 export const searchCityByName = createAsyncThunk(
   'weather/searchCityByName',
   async (cityName: string, { rejectWithValue }) => {
@@ -148,7 +167,7 @@ export const fetchCityDetail = createAsyncThunk(
       
       // Create history array from the forecast data
       // OpenWeather's free API provides forecast in 3-hour steps
-      const historyData = forecastResponse.data.list.map((item: any) => ({
+      const historyData = forecastResponse.data.list.map((item: ForecastDataItem) => ({
         timestamp: item.dt * 1000, // Convert to milliseconds
         temperature: item.main.temp,
         humidity: item.main.humidity,

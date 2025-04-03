@@ -23,6 +23,17 @@ const categoryToQuery: Record<string, string> = {
   all: 'cryptocurrency OR finance OR business'
 };
 
+// Define an interface for the raw news item from the API
+interface NewsDataApiResult {
+  article_id: string;
+  title: string;
+  description: string;
+  link: string;
+  source_id: string;
+  pubDate: string;
+  image_url: string;
+}
+
 export const fetchNewsData = createAsyncThunk(
   'news/fetchNewsData',
   async (category: string = 'crypto', { rejectWithValue }) => {
@@ -45,7 +56,7 @@ export const fetchNewsData = createAsyncThunk(
       
       if (response.data && response.data.results) {
         // Transform the NewsData.io API response to match our NewsItem interface
-        const newsItems: NewsItem[] = response.data.results.map((item: any) => ({
+        const newsItems: NewsItem[] = response.data.results.map((item: NewsDataApiResult) => ({
           id: item.article_id || uuidv4(),
           title: item.title || 'No title available',
           description: item.description || 'No description available',
