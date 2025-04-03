@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.0.1",
+    "apexcharts": "^4.5.0",
     "axios": "^1.6.3",
     "chart.js": "^4.4.1",
     "date-fns": "^3.0.1",
     "next": "15.2.4",
     "react": "^18",
+    "react-apexcharts": "^1.7.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18",
     "react-redux": "^9.0.4",

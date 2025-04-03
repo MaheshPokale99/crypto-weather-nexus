@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import { fetchCityDetail } from '@/redux/slices/weatherSlice';
 import { toggleFavoriteCity } from '@/redux/slices/preferencesSlice';
@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
 import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
 import { WeatherData, CityDetail } from '@/types';
+import TransparentApexCharts from '@/components/charts/TransparentApexCharts';
 
 export default function WeatherDetailPage({ params }: { params: { cityId: string } }) {
   const dispatch = useAppDispatch();
@@ -54,9 +55,119 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
   
   const handleFavoriteToggle = () => {
     dispatch(toggleFavoriteCity(cityId));
+  };
+
+  // Function to prepare chart data from weather history
+  const prepareChartData = () => {
+    if (!selectedCity || !selectedCity.history || selectedCity.history.length === 0) {
+      return null;
+    }
+
+    const categories = selectedCity.history.map(item => formatTime(item.timestamp));
+    const temperatureData = selectedCity.history.map(item => convertTemp(item.temperature));
+    const humidityData = selectedCity.history.map(item => item.humidity);
+
+    return {
+      options: {
+        chart: {
+          id: 'weather-history',
+          type: 'line',
+          toolbar: {
+            show: false,
+          },
+          background: 'transparent',
+        },
+        xaxis: {
+          categories,
+          labels: {
+            style: {
+              colors: '#888',
+              fontSize: '12px',
+            },
+          },
+        },
+        yaxis: [
+          {
+            title: {
+              text: `Temperature (°${temperatureUnit === 'celsius' ? 'C' : 'F'})`,
+              style: {
+                color: '#0ea5e9',
+              },
+            },
+            labels: {
+              style: {
+                colors: '#0ea5e9',
+              },
+            },
+          },
+          {
+            opposite: true,
+            title: {
+              text: 'Humidity (%)',
+              style: {
+                color: '#a78bfa',
+              },
+            },
+            labels: {
+              style: {
+                colors: '#a78bfa',
+              },
+            },
+          },
+        ],
+        stroke: {
+          curve: 'smooth',
+          width: [3, 3],
+        },
+        colors: ['#0ea5e9', '#a78bfa'],
+        tooltip: {
+          theme: 'dark',
+          y: [
+            {
+              formatter: (value: number) => `${value}°${temperatureUnit === 'celsius' ? 'C' : 'F'}`,
+            },
+            {
+              formatter: (value: number) => `${value}%`,
+            },
+          ],
+        },
+        legend: {
+          position: 'top',
+          horizontalAlign: 'right',
+        },
+        grid: {
+          borderColor: '#383838',
+          xaxis: {
+            lines: {
+              show: true,
+            },
+          },
+          yaxis: {
+            lines: {
+              show: true,
+            },
+          },
+        },
+      },
+      series: [
+        {
+          name: 'Temperature',
+          data: temperatureData,
+        },
+        {
+          name: 'Humidity',
+          data: humidityData,
+        },
+      ],
+    };
   };
 
   if (detailsLoading && !cityBasicInfo && !selectedCity) {
@@ -150,6 +261,7 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
   };
   
   const weatherData = getWeatherData();
+  const chartData = prepareChartData();
   
   return (
     <MainLayout>
@@ -228,17 +340,38 @@ export default function WeatherDetailPage({ params }: { params: { cityId: string
           </div>
         </div>
         
-        {/* Forecast Section */}
-        {selectedCity && selectedCity.history && selectedCity.history.length > 0 ? (
+        {/* Weather History Chart Section */}
+        {selectedCity && selectedCity.history && selectedCity.history.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
             <div className="p-6">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Weather History</h2>
+              
+              {chartData && (
+                <div className="mt-4">
+                  <TransparentApexCharts
+                    options={chartData.options}
+                    series={chartData.series}
+                    type="line"
+                    height={350}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Weather History Timeline Section */}
+        {selectedCity && selectedCity.history && selectedCity.history.length > 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Weather Timeline</h2>
               
               <div className="overflow-x-auto">
                 <div className="flex space-x-4 pb-2">
                   {selectedCity.history.map((item, index) => (
                     <div key={index} className="flex-shrink-0 w-24 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
                       <p className="text-xs text-gray-500 dark:text-gray-400">{formatTime(item.timestamp)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(item.timestamp)}</p>
                       <img 
                         src={getWeatherIcon(item.icon || '01d')} 
                         alt={item.conditions} 

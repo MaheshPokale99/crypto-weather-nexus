@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import { fetchCryptoDetail } from '@/redux/slices/cryptoSlice';
 import { toggleFavoriteCrypto } from '@/redux/slices/preferencesSlice';
@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ErrorDisplay from '@/components/shared/ErrorDisplay';
 import ApiErrorDisplay from '@/components/shared/ApiErrorDisplay';
 import { CryptoData, CryptoDetail } from '@/types';
+import TransparentApexCharts from '@/components/charts/TransparentApexCharts';
 
 // Define an interface for price history data
 interface PriceHistoryItem {
@@ -65,9 +66,256 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
   const formatPercentage = (percentage: number) => {
     return (percentage >= 0 ? '+' : '') + percentage.toFixed(2) + '%';
   };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
   
   const handleFavoriteToggle = () => {
     dispatch(toggleFavoriteCrypto(cryptoId));
+  };
+
+  // Function to prepare price chart data
+  const preparePriceChartData = () => {
+    if (!selectedCrypto || !selectedCrypto.history || selectedCrypto.history.length === 0) {
+      return null;
+    }
+
+    // Sort by timestamp to ensure chronological order
+    const historyData = [...selectedCrypto.history].sort((a, b) => a.timestamp - b.timestamp);
+
+    const dates = historyData.map(item => formatDate(item.timestamp));
+    const prices = historyData.map(item => item.price);
+    
+    // Calculate simple moving average for 7 periods if we have enough data
+    let smaData = [];
+    if (historyData.length >= 7) {
+      for (let i = 6; i < historyData.length; i++) {
+        let sum = 0;
+        for (let j = 0; j < 7; j++) {
+          sum += historyData[i - j].price;
+        }
+        smaData.push(sum / 7);
+      }
+      // Pad the beginning with nulls for alignment
+      smaData = Array(6).fill(null).concat(smaData);
+    }
+
+    return {
+      options: {
+        chart: {
+          type: 'line',
+          height: 350,
+          toolbar: {
+            show: true,
+            tools: {
+              download: true,
+              selection: true,
+              zoom: true,
+              zoomin: true,
+              zoomout: true,
+              pan: true,
+              reset: true
+            },
+          },
+          animations: {
+            enabled: true,
+          },
+          background: 'transparent',
+        },
+        stroke: {
+          curve: 'smooth',
+          width: [3, 2],
+        },
+        colors: ['#8b5cf6', '#0ea5e9'],
+        fill: {
+          type: 'gradient',
+          gradient: {
+            shade: 'dark',
+            type: 'vertical',
+            shadeIntensity: 0.3,
+            opacityFrom: 0.4,
+            opacityTo: 0.1,
+            stops: [0, 100]
+          }
+        },
+        markers: {
+          size: 0,
+        },
+        grid: {
+          borderColor: '#383838',
+        },
+        xaxis: {
+          categories: dates,
+          labels: {
+            style: {
+              colors: '#888',
+            },
+          },
+          tooltip: {
+            enabled: false,
+          }
+        },
+        yaxis: {
+          title: {
+            text: 'Price (USD)',
+            style: {
+              color: '#888'
+            }
+          },
+          labels: {
+            formatter: function(val: number) {
+              return formatPrice(val).replace('$', '');
+            },
+            style: {
+              colors: '#888',
+            }
+          },
+        },
+        tooltip: {
+          shared: true,
+          intersect: false,
+          y: {
+            formatter: function(value: number) {
+              return formatPrice(value);
+            }
+          }
+        },
+        legend: {
+          position: 'top',
+          horizontalAlign: 'right',
+          labels: {
+            colors: '#888'
+          }
+        },
+        title: {
+          text: '30-Day Price History',
+          align: 'left',
+          style: {
+            fontSize: '16px',
+            color: '#888'
+          }
+        }
+      },
+      series: [
+        {
+          name: "Price",
+          data: prices
+        },
+        ...(smaData.length > 0 ? [{
+          name: "7-Day MA",
+          data: smaData
+        }] : [])
+      ],
+    };
+  };
+
+  // Function to prepare trading volume chart data
+  const prepareVolumeChartData = () => {
+    // Check if selectedCrypto exists and if it has the volumeHistory property
+    // with the correct type using a type guard
+    if (!selectedCrypto) return null;
+    
+    // Type guard to check if volumeHistory property exists and is an array
+    const hasVolumeHistory = (
+      crypto: any
+    ): crypto is CryptoDetail & { volumeHistory: Array<{ timestamp: number, volume: number }> } => {
+      return (
+        'volumeHistory' in crypto && 
+        Array.isArray(crypto.volumeHistory) && 
+        crypto.volumeHistory.length > 0
+      );
+    };
+
+    if (!hasVolumeHistory(selectedCrypto)) return null;
+
+    // Sort by timestamp to ensure chronological order
+    const volumeData = [...selectedCrypto.volumeHistory].sort((a, b) => a.timestamp - b.timestamp);
+
+    const dates = volumeData.map(item => formatDate(item.timestamp));
+    const volumes = volumeData.map(item => item.volume);
+
+    return {
+      options: {
+        chart: {
+          type: 'bar',
+          height: 250,
+          toolbar: {
+            show: false,
+          },
+          background: 'transparent',
+        },
+        plotOptions: {
+          bar: {
+            columnWidth: '60%',
+            colors: {
+              ranges: [{
+                from: 0,
+                to: Infinity,
+                color: '#0ea5e9'
+              }]
+            }
+          }
+        },
+        dataLabels: {
+          enabled: false,
+        },
+        grid: {
+          borderColor: '#383838',
+        },
+        xaxis: {
+          categories: dates,
+          labels: {
+            style: {
+              colors: '#888',
+            },
+          }
+        },
+        yaxis: {
+          title: {
+            text: 'Volume (USD)',
+            style: {
+              color: '#888'
+            }
+          },
+          labels: {
+            formatter: function(val: number) {
+              if (val >= 1_000_000_000) {
+                return '$' + (val / 1_000_000_000).toFixed(1) + 'B';
+              } else if (val >= 1_000_000) {
+                return '$' + (val / 1_000_000).toFixed(1) + 'M';
+              } else if (val >= 1_000) {
+                return '$' + (val / 1_000).toFixed(1) + 'K';
+              }
+              return '$' + val.toFixed(0);
+            },
+            style: {
+              colors: '#888',
+            }
+          },
+        },
+        tooltip: {
+          y: {
+            formatter: function(value: number) {
+              return formatMarketCap(value);
+            }
+          }
+        },
+        title: {
+          text: 'Trading Volume',
+          align: 'left',
+          style: {
+            fontSize: '16px',
+            color: '#888'
+          }
+        }
+      },
+      series: [{
+        name: 'Volume',
+        data: volumes
+      }],
+    };
   };
 
   if (detailsLoading && !cryptoOverview && !selectedCrypto) {
@@ -128,6 +376,9 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
       </MainLayout>
     );
   }
+
+  const priceChartData = preparePriceChartData();
+  const volumeChartData = prepareVolumeChartData();
   
   return (
     <MainLayout>
@@ -235,30 +486,109 @@ export default function CryptoDetailPage({ params }: { params: { cryptoId: strin
         {/* Price Chart Section */}
         {selectedCrypto && selectedCrypto.history && selectedCrypto.history.length > 0 ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Price History (30 Days)</h2>
-            <div className="h-64 w-full">
-              {/* This is where a real chart would be rendered using the history data */}
-              <div className="bg-gray-100 dark:bg-gray-700 h-full rounded-lg flex items-center justify-center">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Price History</h2>
+            
+            {priceChartData ? (
+              <div className="mt-4">
+                <TransparentApexCharts
+                  type="area"
+                  height={350}
+                  options={priceChartData.options}
+                  series={priceChartData.series}
+                />
+              </div>
+            ) : (
+              <div className="bg-gray-100 dark:bg-gray-700 h-64 rounded-lg flex items-center justify-center">
                 <p className="text-gray-500 dark:text-gray-400">
-                  Historical price chart would render here using {selectedCrypto.history.length} real data points
+                  No price history data available
                 </p>
               </div>
-            </div>
+            )}
+
+            {/* Volume Chart */}
+            {volumeChartData && (
+              <div className="mt-8">
+                <TransparentApexCharts
+                  type="bar"
+                  height={250}
+                  options={volumeChartData.options}
+                  series={volumeChartData.series}
+                />
+              </div>
+            )}
+
+            {/* Market Stats Table */}
+            {selectedCrypto && (
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Market Statistics</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">Market Cap Rank</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">
+                          {(selectedCrypto as any).marketCapRank ? `#${(selectedCrypto as any).marketCapRank}` : 'N/A'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">Market Cap</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">{formatMarketCap(selectedCrypto.marketCap)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">24h Trading Volume</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">{formatMarketCap(selectedCrypto.volume24h || 0)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">Fully Diluted Valuation</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">
+                          {(selectedCrypto as any).fullyDilutedValuation 
+                            ? formatMarketCap((selectedCrypto as any).fullyDilutedValuation) 
+                            : 'N/A'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">Circulating Supply</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">{selectedCrypto.circulatingSupply?.toLocaleString() || 'N/A'} {(cryptoDetail.symbol || '').toUpperCase()}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">Total Supply</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">{selectedCrypto.totalSupply?.toLocaleString() || 'N/A'} {(cryptoDetail.symbol || '').toUpperCase()}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">Max Supply</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">{selectedCrypto.maxSupply?.toLocaleString() || 'Unlimited'} {(cryptoDetail.symbol || '').toUpperCase()}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">All-Time High</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">{selectedCrypto.allTimeHigh ? formatPrice(selectedCrypto.allTimeHigh) : 'N/A'}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 pl-4 pr-3 text-sm font-medium text-gray-500 dark:text-gray-400">All-Time Low</td>
+                        <td className="py-3 pl-3 pr-4 text-sm text-gray-900 dark:text-white">
+                          {(selectedCrypto as any).allTimeLow 
+                            ? formatPrice((selectedCrypto as any).allTimeLow) 
+                            : 'N/A'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Price History</h2>
-            <div className="bg-gray-100 dark:bg-gray-700 h-64 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500 dark:text-gray-400 text-center px-4">
-                Historical price data is unavailable. Please check your API connection or retry.
-                <br />
-                <button 
-                  onClick={handleRetry}
-                  className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                >
-                  Retry
-                </button>
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-6 text-center">
+              <p className="text-gray-500 dark:text-gray-400">
+                Detailed price history data is unavailable. Please check your API connection or retry.
               </p>
+              <button 
+                onClick={handleRetry}
+                className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                Retry
+              </button>
             </div>
           </div>
         )}
