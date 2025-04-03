@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Crypto Weather Nexus
+
+A Next.js application that aggregates cryptocurrency data, weather information, and relevant news in one dashboard.
+
+## Features
+
+- **Cryptocurrency Tracking**: Live price updates for major cryptocurrencies with WebSocket integration
+- **Weather Information**: Current weather and forecasts for major cities worldwide
+- **News Aggregation**: Latest news related to cryptocurrency, finance, and weather
+- **Favorites System**: Save your preferred cities and cryptocurrencies for quick access
+- **Notifications**: Real-time alerts for significant price changes and weather events
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Dark Mode**: Toggle between light and dark themes
+
+## Tech Stack
+
+- **Frontend**: Next.js 15.x with React 18
+- **State Management**: Redux Toolkit
+- **Styling**: Tailwind CSS
+- **Data Visualization**: Custom chart components
+- **API Integration**: 
+  - CoinGecko API for cryptocurrency data
+  - OpenWeather API for weather information
+  - NewsData.io for news content
+  - WebSockets for real-time cryptocurrency updates
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 16.x or later
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/crypto-weather-nexus.git
+   cd crypto-weather-nexus
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Create a `.env.local` file in the root directory with your API keys:
+   ```
+   NEXT_PUBLIC_OPENWEATHER_API_KEY=your_openweather_api_key
+   NEXT_PUBLIC_COINGECKO_API_KEY=your_coingecko_api_key
+   NEXT_PUBLIC_NEWSDATA_API_KEY=your_newsdata_api_key
+   ```
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## API Rate Limits
+
+This application uses several external APIs, which have rate limits:
+
+- **CoinGecko API**: Free tier has limited requests per minute. The app includes fallback to mock data when rate limits are exceeded.
+- **OpenWeather API**: Free tier has limited calls per minute.
+- **NewsData API**: Free tier has limited requests per day.
+
+## Error Handling
+
+The application includes robust error handling:
+
+- Exponential backoff for API rate limiting
+- Graceful fallback to mock data when APIs are unavailable
+- WebSocket reconnection logic
+- Type safety with TypeScript interfaces
+
+## Project Structure
+
+```
+crypto-weather-nexus/
+├── public/               # Static assets
+├── src/
+│   ├── app/              # Next.js app router pages
+│   ├── components/       # React components
+│   │   ├── crypto/       # Cryptocurrency components
+│   │   ├── layout/       # Layout components
+│   │   ├── news/         # News components
+│   │   ├── shared/       # Shared/common components
+│   │   └── weather/      # Weather components
+│   ├── redux/            # Redux state management
+│   │   ├── slices/       # Redux slices for each feature
+│   │   └── store.ts      # Redux store configuration
+│   ├── styles/           # Global styles
+│   ├── types/            # TypeScript interfaces and types
+│   └── utils/            # Utility functions and services
+├── .env.local            # Environment variables (not in repo)
+├── next.config.js        # Next.js configuration
+├── package.json          # Dependencies and scripts
+└── tailwind.config.js    # Tailwind CSS configuration
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Known Issues and Limitations
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- CoinGecko API may return 429 errors (rate limit exceeded) when using the free tier
+- WebSocket connections may fail in some environments
+- Some mock data is used when APIs are unavailable
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+## Acknowledgments
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- CoinGecko for cryptocurrency data
+- OpenWeather for weather information
+- NewsData.io for news content
