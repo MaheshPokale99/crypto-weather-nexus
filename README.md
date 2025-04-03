@@ -178,10 +178,6 @@ The application is optimized for modern browsers:
 - Safari (latest)
 - Edge (latest)
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - CoinGecko for cryptocurrency data
