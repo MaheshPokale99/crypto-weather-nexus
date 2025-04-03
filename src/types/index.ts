@@ -102,7 +102,7 @@ export interface UserPreferences {
 // Notifications
 export interface Notification {
   id: string;
-  type: 'price_alert' | 'weather_alert';
+  type: 'price_alert' | 'weather_alert' | 'error' | 'warning' | 'info' | 'success';
   title: string;
   message: string;
   timestamp: number;

@@ -42,19 +42,209 @@ interface ForecastDataItem {
   };
 }
 
+// Mock data for fallback when API fails
+const mockWeatherData: WeatherData[] = [
+  {
+    cityId: '5128581',
+    name: 'New York',
+    country: 'US',
+    temperature: 22.5,
+    humidity: 65,
+    conditions: 'Clear',
+    description: 'clear sky',
+    icon: '01d',
+    windSpeed: 5.2,
+    pressure: 1012,
+    visibility: 10000,
+    timestamp: Date.now(),
+  },
+  {
+    cityId: '2643743',
+    name: 'London',
+    country: 'GB',
+    temperature: 16.8,
+    humidity: 72,
+    conditions: 'Clouds',
+    description: 'scattered clouds',
+    icon: '03d',
+    windSpeed: 4.1,
+    pressure: 1009,
+    visibility: 9000,
+    timestamp: Date.now(),
+  },
+  {
+    cityId: '1850147',
+    name: 'Tokyo',
+    country: 'JP',
+    temperature: 28.2,
+    humidity: 58,
+    conditions: 'Rain',
+    description: 'light rain',
+    icon: '10d',
+    windSpeed: 3.6,
+    pressure: 1015,
+    visibility: 8000,
+    timestamp: Date.now(),
+  },
+  {
+    cityId: '2988507',
+    name: 'Paris',
+    country: 'FR',
+    temperature: 19.5,
+    humidity: 63,
+    conditions: 'Clouds',
+    description: 'broken clouds',
+    icon: '04d',
+    windSpeed: 3.9,
+    pressure: 1011,
+    visibility: 10000,
+    timestamp: Date.now(),
+  },
+  {
+    cityId: '1796236',
+    name: 'Shanghai',
+    country: 'CN',
+    temperature: 26.7,
+    humidity: 70,
+    conditions: 'Haze',
+    description: 'haze',
+    icon: '50d',
+    windSpeed: 4.8,
+    pressure: 1010,
+    visibility: 5000,
+    timestamp: Date.now(),
+  },
+];
+
+// Mock forecast data for fallback
+const mockForecastData = [
+  {
+    timestamp: Date.now() - 3600000 * 24,
+    temperature: 21.5,
+    humidity: 68,
+    conditions: 'Clear',
+    description: 'clear sky',
+    icon: '01d',
+    windSpeed: 4.8,
+    pressure: 1013,
+  },
+  {
+    timestamp: Date.now() - 3600000 * 18,
+    temperature: 20.1,
+    humidity: 70,
+    conditions: 'Clouds',
+    description: 'few clouds',
+    icon: '02n',
+    windSpeed: 3.2,
+    pressure: 1012,
+  },
+  {
+    timestamp: Date.now() - 3600000 * 12,
+    temperature: 19.2,
+    humidity: 75,
+    conditions: 'Clouds',
+    description: 'scattered clouds',
+    icon: '03n',
+    windSpeed: 2.5,
+    pressure: 1011,
+  },
+  {
+    timestamp: Date.now() - 3600000 * 6,
+    temperature: 21.8,
+    humidity: 65,
+    conditions: 'Clear',
+    description: 'clear sky',
+    icon: '01d',
+    windSpeed: 4.0,
+    pressure: 1012,
+  },
+  {
+    timestamp: Date.now(),
+    temperature: 23.5,
+    humidity: 60,
+    conditions: 'Clear',
+    description: 'clear sky',
+    icon: '01d',
+    windSpeed: 5.2,
+    pressure: 1012,
+  },
+  {
+    timestamp: Date.now() + 3600000 * 6,
+    temperature: 22.7,
+    humidity: 62,
+    conditions: 'Clouds',
+    description: 'few clouds',
+    icon: '02d',
+    windSpeed: 4.8,
+    pressure: 1011,
+  },
+  {
+    timestamp: Date.now() + 3600000 * 12,
+    temperature: 19.8,
+    humidity: 70,
+    conditions: 'Clouds',
+    description: 'scattered clouds',
+    icon: '03n',
+    windSpeed: 3.5,
+    pressure: 1010,
+  },
+  {
+    timestamp: Date.now() + 3600000 * 18,
+    temperature: 18.2,
+    humidity: 75,
+    conditions: 'Clear',
+    description: 'clear sky',
+    icon: '01n',
+    windSpeed: 2.8,
+    pressure: 1012,
+  },
+];
+
+// Helper function to create a mock city detail
+const createMockCityDetail = (cityId: string): CityDetail => {
+  const cityData = mockWeatherData.find(city => city.cityId === cityId) || mockWeatherData[0];
+  
+  return {
+    id: cityId,
+    name: cityData.name,
+    country: cityData.country,
+    timezone: 0,
+    coordinates: {
+      lat: 0,
+      lon: 0
+    },
+    currentWeather: {
+      temperature: cityData.temperature,
+      feelsLike: cityData.temperature - 2,
+      humidity: cityData.humidity,
+      conditions: cityData.conditions,
+      description: cityData.description,
+      icon: cityData.icon,
+      windSpeed: cityData.windSpeed,
+      pressure: cityData.pressure,
+      visibility: cityData.visibility,
+      sunrise: Date.now() - 21600000, // 6 hours ago
+      sunset: Date.now() + 21600000,  // 6 hours from now
+    },
+    history: mockForecastData,
+  };
+};
+
 export const searchCityByName = createAsyncThunk(
   'weather/searchCityByName',
   async (cityName: string, { rejectWithValue }) => {
     try {
       // Check if API key is available in environment variables
-      if (!process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY) {
-        return rejectWithValue('OpenWeather API key is missing. Please add it to your environment variables.');
+      const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+      if (!apiKey) {
+        console.warn('OpenWeather API key is missing. Using mock data.');
+        return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
       }
       
       const response = await axios.get(`${API_BASE_URL}/weather`, {
         params: {
           q: cityName,
-          appid: process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY,
+          appid: apiKey,
           units: 'metric'
         }
       });
@@ -75,8 +265,28 @@ export const searchCityByName = createAsyncThunk(
         timestamp: Date.now(),
       } as WeatherData;
     } catch (error) {
+      if (axios.isAxiosError(error)) {
+        // Handle specific error codes
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.warn('OpenWeather API key is invalid or unauthorized. Using mock data.');
+          return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
+        }
+        
+        if (error.response?.status === 404) {
+          return rejectWithValue(`City "${cityName}" not found. Please try another city name.`);
+        }
+        
+        if (error.response?.status === 429) {
+          console.warn('OpenWeather API rate limit exceeded. Using mock data.');
+          return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
+        }
+        
+        console.error('Error searching for city:', error.message);
+        return mockWeatherData.find(w => w.name.toLowerCase() === cityName.toLowerCase()) || mockWeatherData[0];
+      }
+      
       console.error('Error searching for city:', error);
-      return rejectWithValue(`City "${cityName}" not found. Please try another city name.`);
+      return rejectWithValue(`Failed to search for "${cityName}". Please try again later.`);
     }
   }
 );
@@ -86,8 +296,10 @@ export const fetchWeatherData = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       // Check if API key is available in environment variables
-      if (!process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY) {
-        return rejectWithValue('OpenWeather API key is missing. Please add it to your environment variables.');
+      const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+      if (!apiKey) {
+        console.warn('OpenWeather API key is missing. Using mock data.');
+        return mockWeatherData;
       }
       
       const weatherPromises = defaultCities.map(async (city) => {
@@ -95,7 +307,7 @@ export const fetchWeatherData = createAsyncThunk(
           const response = await axios.get(`${API_BASE_URL}/weather`, {
             params: {
               id: city.id,
-              appid: process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY,
+              appid: apiKey,
               units: 'metric'
             }
           });
@@ -116,24 +328,39 @@ export const fetchWeatherData = createAsyncThunk(
             timestamp: Date.now(),
           };
         } catch (err) {
+          if (axios.isAxiosError(err)) {
+            // Handle specific error codes
+            if (err.response?.status === 401 || err.response?.status === 403) {
+              console.warn(`OpenWeather API key is invalid or unauthorized for ${city.name}. Using mock data.`);
+              return mockWeatherData.find(w => w.cityId === city.id);
+            }
+            
+            if (err.response?.status === 429) {
+              console.warn(`OpenWeather API rate limit exceeded for ${city.name}. Using mock data.`);
+              return mockWeatherData.find(w => w.cityId === city.id);
+            }
+          }
+          
           console.error(`Failed to fetch weather for ${city.name}:`, err);
-          // Return null for this city, we'll filter these out later
-          return null;
+          // Return mock data for this city
+          return mockWeatherData.find(w => w.cityId === city.id);
         }
       });
       
       const results = await Promise.all(weatherPromises);
-      // Filter out any null values (failed requests)
+      // Filter out any null values (should never happen now, since we return mock data)
       const validResults = results.filter(result => result !== null) as WeatherData[];
       
       if (validResults.length === 0) {
-        return rejectWithValue('Failed to fetch weather data for any city. Please try again later.');
+        console.warn('No valid weather data found. Using all mock data.');
+        return mockWeatherData;
       }
       
       return validResults;
     } catch (error) {
       console.error('Error fetching weather data:', error);
-      return rejectWithValue('An unexpected error occurred while fetching weather data.');
+      // Fall back to mock data for complete failure
+      return mockWeatherData;
     }
   }
 );
@@ -143,68 +370,93 @@ export const fetchCityDetail = createAsyncThunk(
   async (cityId: string, { rejectWithValue }) => {
     try {
       // Check if API key is available in environment variables
-      if (!process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY) {
-        return rejectWithValue('OpenWeather API key is missing. Please add it to your environment variables.');
+      const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+      if (!apiKey) {
+        console.warn('OpenWeather API key is missing. Using mock data.');
+        return createMockCityDetail(cityId);
       }
       
-      // Get current weather data
-      const currentResponse = await axios.get(`${API_BASE_URL}/weather`, {
-        params: {
+      try {
+        // Get current weather data
+        const currentResponse = await axios.get(`${API_BASE_URL}/weather`, {
+          params: {
+            id: cityId,
+            appid: apiKey,
+            units: 'metric'
+          }
+        });
+        
+        // Get 5-day forecast data (includes historical data points)
+        const forecastResponse = await axios.get(`${API_BASE_URL}/forecast`, {
+          params: {
+            id: cityId,
+            appid: apiKey,
+            units: 'metric'
+          }
+        });
+        
+        // Create history array from the forecast data
+        // OpenWeather's free API provides forecast in 3-hour steps
+        const historyData = forecastResponse.data.list.map((item: ForecastDataItem) => ({
+          timestamp: item.dt * 1000, // Convert to milliseconds
+          temperature: item.main.temp,
+          humidity: item.main.humidity,
+          conditions: item.weather[0].main,
+          description: item.weather[0].description,
+          icon: item.weather[0].icon,
+          windSpeed: item.wind.speed,
+          pressure: item.main.pressure,
+        }));
+        
+        return {
           id: cityId,
-          appid: process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY,
-          units: 'metric'
+          name: currentResponse.data.name,
+          country: currentResponse.data.sys.country,
+          timezone: currentResponse.data.timezone,
+          coordinates: {
+            lat: currentResponse.data.coord.lat,
+            lon: currentResponse.data.coord.lon
+          },
+          currentWeather: {
+            temperature: currentResponse.data.main.temp,
+            feelsLike: currentResponse.data.main.feels_like,
+            humidity: currentResponse.data.main.humidity,
+            conditions: currentResponse.data.weather[0].main,
+            description: currentResponse.data.weather[0].description,
+            icon: currentResponse.data.weather[0].icon,
+            windSpeed: currentResponse.data.wind.speed,
+            pressure: currentResponse.data.main.pressure,
+            visibility: currentResponse.data.visibility,
+            sunrise: currentResponse.data.sys.sunrise * 1000, // Convert to milliseconds
+            sunset: currentResponse.data.sys.sunset * 1000,   // Convert to milliseconds
+          },
+          history: historyData,
+        };
+      } catch (err) {
+        if (axios.isAxiosError(err)) {
+          // Handle specific error codes
+          if (err.response?.status === 401 || err.response?.status === 403) {
+            console.warn('OpenWeather API key is invalid or unauthorized. Using mock data.');
+            return createMockCityDetail(cityId);
+          }
+          
+          if (err.response?.status === 404) {
+            console.warn(`City details for ID ${cityId} not found. Using mock data.`);
+            return createMockCityDetail(cityId);
+          }
+          
+          if (err.response?.status === 429) {
+            console.warn('OpenWeather API rate limit exceeded. Using mock data.');
+            return createMockCityDetail(cityId);
+          }
         }
-      });
-      
-      // Get 5-day forecast data (includes historical data points)
-      const forecastResponse = await axios.get(`${API_BASE_URL}/forecast`, {
-        params: {
-          id: cityId,
-          appid: process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY,
-          units: 'metric'
-        }
-      });
-      
-      // Create history array from the forecast data
-      // OpenWeather's free API provides forecast in 3-hour steps
-      const historyData = forecastResponse.data.list.map((item: ForecastDataItem) => ({
-        timestamp: item.dt * 1000, // Convert to milliseconds
-        temperature: item.main.temp,
-        humidity: item.main.humidity,
-        conditions: item.weather[0].main,
-        description: item.weather[0].description,
-        icon: item.weather[0].icon,
-        windSpeed: item.wind.speed,
-        pressure: item.main.pressure,
-      }));
-      
-      return {
-        id: cityId,
-        name: currentResponse.data.name,
-        country: currentResponse.data.sys.country,
-        timezone: currentResponse.data.timezone,
-        coordinates: {
-          lat: currentResponse.data.coord.lat,
-          lon: currentResponse.data.coord.lon
-        },
-        currentWeather: {
-          temperature: currentResponse.data.main.temp,
-          feelsLike: currentResponse.data.main.feels_like,
-          humidity: currentResponse.data.main.humidity,
-          conditions: currentResponse.data.weather[0].main,
-          description: currentResponse.data.weather[0].description,
-          icon: currentResponse.data.weather[0].icon,
-          windSpeed: currentResponse.data.wind.speed,
-          pressure: currentResponse.data.main.pressure,
-          visibility: currentResponse.data.visibility,
-          sunrise: currentResponse.data.sys.sunrise * 1000, // Convert to milliseconds
-          sunset: currentResponse.data.sys.sunset * 1000,   // Convert to milliseconds
-        },
-        history: historyData,
-      };
+        
+        console.error('Error fetching city detail:', err);
+        return createMockCityDetail(cityId);
+      }
     } catch (error) {
-      console.error('Error fetching city detail:', error);
-      return rejectWithValue('Failed to fetch detailed weather data for this city.');
+      console.error('Error in fetchCityDetail flow:', error);
+      return createMockCityDetail(cityId);
     }
   }
 );

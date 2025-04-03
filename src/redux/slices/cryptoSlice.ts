@@ -87,59 +87,71 @@ export const fetchCryptoData = createAsyncThunk(
         try {
           // Check if API key is available in environment variables
           if (!process.env.NEXT_PUBLIC_COINGECKO_API_KEY) {
-            // Don't use rejectWithValue here as it doesn't match the return type
-            // Instead return mock data when API key is missing
             console.warn('CoinGecko API key is missing. Using fallback data.');
             return getMockCryptoData();
           }
           
-          const response = await axios.get(API_BASE_URL + '/coins/markets', {
-            params: {
-              vs_currency: 'usd',
-              order: 'market_cap_desc',
-              per_page: 10,
-              page: 1,
-              sparkline: false,
-              x_cg_demo_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
+          try {
+            const response = await axios.get(API_BASE_URL + '/coins/markets', {
+              params: {
+                vs_currency: 'usd',
+                order: 'market_cap_desc',
+                per_page: 10,
+                page: 1,
+                sparkline: false,
+                x_cg_demo_api_key: process.env.NEXT_PUBLIC_COINGECKO_API_KEY
+              }
+            });
+            
+            // Define the coin data interface
+            interface CoinGeckoApiResponse {
+              id: string;
+              symbol: string;
+              name: string;
+              current_price: number;
+              price_change_percentage_24h: number | null;
+              market_cap: number;
             }
-          });
-          
-          // Define the coin data interface
-          interface CoinGeckoApiResponse {
-            id: string;
-            symbol: string;
-            name: string;
-            current_price: number;
-            price_change_percentage_24h: number | null;
-            market_cap: number;
+            
+            return response.data.map((coin: CoinGeckoApiResponse) => ({
+              id: coin.id,
+              symbol: coin.symbol,
+              name: coin.name,
+              price: coin.current_price,
+              priceChange24h: coin.price_change_percentage_24h || 0,
+              marketCap: coin.market_cap,
+              timestamp: Date.now(),
+            }));
+          } catch (error) {
+            console.error('Error fetching crypto data:', error);
+            
+            // Handle specific error codes
+            if (axios.isAxiosError(error)) {
+              // If 401 unauthorized or 403 forbidden, API key is invalid
+              if (error.response?.status === 401 || error.response?.status === 403) {
+                console.warn('API key is invalid or unauthorized. Using fallback data.');
+                return getMockCryptoData();
+              }
+              
+              // If we get a 429 (rate limit) error and haven't exceeded max retries
+              if (error.response?.status === 429 && retries < MAX_RETRIES) {
+                retries++;
+                const delayMs = 1000 * Math.pow(2, retries); // Exponential backoff
+                
+                console.log(`Rate limit exceeded. Retrying in ${delayMs/1000} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                
+                // Try again after waiting
+                return fetchWithRetry();
+              }
+            }
+            
+            // For any other error, use mock data as fallback
+            console.warn('Using fallback crypto data due to API error');
+            return getMockCryptoData();
           }
-          
-          return response.data.map((coin: CoinGeckoApiResponse) => ({
-            id: coin.id,
-            symbol: coin.symbol,
-            name: coin.name,
-            price: coin.current_price,
-            priceChange24h: coin.price_change_percentage_24h || 0,
-            marketCap: coin.market_cap,
-            timestamp: Date.now(),
-          }));
         } catch (error) {
-          console.error('Error fetching crypto data:', error);
-          
-          // If we get a 429 (rate limit) error and haven't exceeded max retries
-          if (axios.isAxiosError(error) && error.response?.status === 429 && retries < MAX_RETRIES) {
-            retries++;
-            const delayMs = 1000 * Math.pow(2, retries); // Exponential backoff
-            
-            console.log(`Rate limit exceeded. Retrying in ${delayMs/1000} seconds...`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-            
-            // Try again after waiting
-            return fetchWithRetry();
-          }
-          
-          // If it's a permanent error or we've exceeded retries, use mock data as fallback
-          console.warn('Using fallback crypto data due to API error');
+          console.error('Unexpected error in fetchWithRetry:', error);
           return getMockCryptoData();
         }
       };

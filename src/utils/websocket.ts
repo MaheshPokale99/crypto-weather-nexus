@@ -38,96 +38,143 @@ class WebSocketService {
         this.simulateCryptoUpdates();
         return;
       }
+
+      // Add a flag to track connection attempts
+      let connectionAttempted = false;
       
       // Use a try-catch block specifically for the WebSocket creation
       try {
-        this.cryptoSocket = new WebSocket('wss://ws.coincap.io/prices?assets=bitcoin,ethereum');
+        // If we're running in a browser without HTTPS and the WebSocket endpoint uses wss://, 
+        // we might encounter issues - let's handle multiple potential endpoints
+        const endpoints = [
+          'wss://ws.coincap.io/prices?assets=bitcoin,ethereum',
+          'ws://ws.coincap.io/prices?assets=bitcoin,ethereum'
+        ];
+        
+        // Try the first endpoint
+        this.cryptoSocket = new WebSocket(endpoints[0]);
+        connectionAttempted = true;
+        
+        // Set a connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (this.cryptoSocket && this.cryptoSocket.readyState !== WebSocket.OPEN) {
+            console.warn('WebSocket connection timed out, falling back to simulation');
+            this.cryptoSocket?.close();
+            this.simulateCryptoUpdates();
+          }
+        }, 5000);
+        
+        this.cryptoSocket.onopen = () => {
+          console.log('Connected to CoinCap WebSocket');
+          clearTimeout(connectionTimeout);
+        };
+
+        // Add a retry mechanism if connection fails
+        let retryCount = 0;
+        const MAX_RETRIES = 3;
+        
+        this.cryptoSocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const state = store.getState();
+            // Ensure cryptos exists and is an array before accessing it
+            const cryptos = Array.isArray(state?.crypto?.cryptos) ? state.crypto.cryptos : [];
+            
+            // Reset retry count on successful message
+            retryCount = 0;
+            
+            // Process bitcoin updates
+            if (data.bitcoin) {
+              store.dispatch(updateCryptoPrice({
+                id: 'bitcoin',
+                price: parseFloat(data.bitcoin),
+                priceChange24h: 0, // We don't get this from the websocket
+              }));
+              
+              // Generate a notification for significant price change (>1%)
+              const currentPrice = parseFloat(data.bitcoin);
+              const bitcoin = cryptos.find(c => c?.id === 'bitcoin');
+              
+              if (bitcoin && bitcoin.price && Math.abs((currentPrice - bitcoin.price) / bitcoin.price) > 0.01) {
+                const increase = currentPrice > bitcoin.price;
+                store.dispatch(addNotification({
+                  type: 'price_alert',
+                  title: `Bitcoin ${increase ? 'up' : 'down'} by 1%+`,
+                  message: `Bitcoin price has ${increase ? 'increased' : 'decreased'} to $${currentPrice.toLocaleString()}`,
+                  timestamp: Date.now(),
+                }));
+              }
+            }
+            
+            // Process ethereum updates
+            if (data.ethereum) {
+              store.dispatch(updateCryptoPrice({
+                id: 'ethereum',
+                price: parseFloat(data.ethereum),
+                priceChange24h: 0, // We don't get this from the websocket
+              }));
+              
+              // Similar notification logic for Ethereum
+              const currentPrice = parseFloat(data.ethereum);
+              const ethereum = cryptos.find(c => c?.id === 'ethereum');
+              
+              if (ethereum && ethereum.price && Math.abs((currentPrice - ethereum.price) / ethereum.price) > 0.01) {
+                const increase = currentPrice > ethereum.price;
+                store.dispatch(addNotification({
+                  type: 'price_alert',
+                  title: `Ethereum ${increase ? 'up' : 'down'} by 1%+`,
+                  message: `Ethereum price has ${increase ? 'increased' : 'decreased'} to $${currentPrice.toLocaleString()}`,
+                  timestamp: Date.now(),
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+          }
+        };
+
+        this.cryptoSocket.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          // Clear timeout to avoid duplicated fallback calls
+          clearTimeout(connectionTimeout);
+          
+          // Increment retry count and try again if under max retries
+          retryCount++;
+          if (retryCount <= MAX_RETRIES) {
+            console.log(`WebSocket connection error, retrying (${retryCount}/${MAX_RETRIES})...`);
+            setTimeout(() => this.initCryptoSocket(), 1000 * retryCount);
+          } else {
+            // Fall back to simulation after max retries
+            console.log('Max WebSocket connection retries reached, falling back to simulation');
+            this.simulateCryptoUpdates();
+          }
+        };
+
+        this.cryptoSocket.onclose = (event) => {
+          console.log('CoinCap WebSocket connection closed', event.code, event.reason);
+          clearTimeout(connectionTimeout);
+          
+          // Only try to reconnect if this was an unexpected closure and under max retries
+          if (event.code !== 1000 && retryCount < MAX_RETRIES) {
+            retryCount++;
+            console.log(`WebSocket closed unexpectedly, retrying (${retryCount}/${MAX_RETRIES}) in 5 seconds...`);
+            // Try to reconnect in 5 seconds
+            setTimeout(() => this.initCryptoSocket(), 5000);
+          } else if (retryCount >= MAX_RETRIES) {
+            console.log('Max WebSocket reconnection retries reached, falling back to simulation');
+            this.simulateCryptoUpdates();
+          } else {
+            console.log('WebSocket closed normally, not reconnecting');
+          }
+        };
       } catch (err) {
         console.error('Failed to create WebSocket connection:', err);
-        // Simulate data for development
-        this.simulateCryptoUpdates();
-        return;
-      }
-
-      this.cryptoSocket.onopen = () => {
-        console.log('Connected to CoinCap WebSocket');
-      };
-
-      this.cryptoSocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          const state = store.getState();
-          // Ensure cryptos exists and is an array before accessing it
-          const cryptos = Array.isArray(state?.crypto?.cryptos) ? state.crypto.cryptos : [];
-          
-          // Process bitcoin updates
-          if (data.bitcoin) {
-            store.dispatch(updateCryptoPrice({
-              id: 'bitcoin',
-              price: parseFloat(data.bitcoin),
-              priceChange24h: 0, // We don't get this from the websocket
-            }));
-            
-            // Generate a notification for significant price change (>1%)
-            const currentPrice = parseFloat(data.bitcoin);
-            const bitcoin = cryptos.find(c => c?.id === 'bitcoin');
-            
-            if (bitcoin && bitcoin.price && Math.abs((currentPrice - bitcoin.price) / bitcoin.price) > 0.01) {
-              const increase = currentPrice > bitcoin.price;
-              store.dispatch(addNotification({
-                type: 'price_alert',
-                title: `Bitcoin ${increase ? 'up' : 'down'} by 1%+`,
-                message: `Bitcoin price has ${increase ? 'increased' : 'decreased'} to $${currentPrice.toLocaleString()}`,
-                timestamp: Date.now(),
-              }));
-            }
-          }
-          
-          // Process ethereum updates
-          if (data.ethereum) {
-            store.dispatch(updateCryptoPrice({
-              id: 'ethereum',
-              price: parseFloat(data.ethereum),
-              priceChange24h: 0, // We don't get this from the websocket
-            }));
-            
-            // Similar notification logic for Ethereum
-            const currentPrice = parseFloat(data.ethereum);
-            const ethereum = cryptos.find(c => c?.id === 'ethereum');
-            
-            if (ethereum && ethereum.price && Math.abs((currentPrice - ethereum.price) / ethereum.price) > 0.01) {
-              const increase = currentPrice > ethereum.price;
-              store.dispatch(addNotification({
-                type: 'price_alert',
-                title: `Ethereum ${increase ? 'up' : 'down'} by 1%+`,
-                message: `Ethereum price has ${increase ? 'increased' : 'decreased'} to $${currentPrice.toLocaleString()}`,
-                timestamp: Date.now(),
-              }));
-            }
-          }
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-        }
-      };
-
-      this.cryptoSocket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        // Fall back to simulation on error
-        this.simulateCryptoUpdates();
-      };
-
-      this.cryptoSocket.onclose = (event) => {
-        console.log('CoinCap WebSocket connection closed', event.code, event.reason);
         
-        // Only try to reconnect if this was an unexpected closure
-        if (event.code !== 1000) {
-          console.log('Attempting to reconnect in 5 seconds...');
-          // Try to reconnect in 5 seconds
-          setTimeout(() => this.initCryptoSocket(), 5000);
-        } else {
-          console.log('WebSocket closed normally, not reconnecting');
+        // If we attempted a connection but it failed, try simulation
+        if (connectionAttempted) {
+          this.simulateCryptoUpdates();
         }
-      };
+      }
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error);
       // Simulate data as fallback
